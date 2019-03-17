@@ -2,6 +2,8 @@ import requests
 from bs4 import BeautifulSoup
 import csv
 from sys import exit
+import os.path
+import json
 
 
 home = 'http://1.22.215.49:56442/NewSMS/'
@@ -20,7 +22,12 @@ def log_in(user, passw):
     payload = {'user.userID': str(user),
                'user.password': str(passw)}
 
-    session.post(login, data=payload)
+    try:
+        session.post(login, data=payload)
+
+    except Exception:
+        print('Please check your Internet Connection or try again later!')
+        exit(0)
 
 
 def stb_status_html():
@@ -76,18 +83,16 @@ def get_active_pack(a, b, c):
 
     list_buq = soup.find_all(class_='info')
 
-    with open('temp.k', 'w') as fh:
+    channel_list = list()
 
-        for item in list_buq:
-            if 'Subscribed' in item.text.strip():
-                if choice == str(1):
-                    print(item.text.strip('\n').split('\n')[0])
-                elif choice == str(2):
-                    fh.write(item.text.strip('\n').split('\n')[0] + '\n')
-                else:
-                    pass
-            else:
-                pass
+    for item in list_buq:
+        if 'Subscribed' in item.text.strip():
+            channel_list.append(item.text.strip('\n').split('\n')[0])
+
+        else:
+            pass
+
+    return channel_list
 
 
 def calc_all(a, b, c):
@@ -123,61 +128,180 @@ def write_csv(dict1, name):
     w.writerow(['FTA_Basic', 130])
 
 
-def calc_price(price_csv, cust_price):
-
-    w = csv.reader(open(price_csv, 'r'))
-
-    channel_dict = dict()
-
-    for rows in w:
-        if any(x.strip() for x in rows):
-            channel_dict[rows[0]] = rows[1]
+def calc_price(price_dict, cust_price_list):
 
     total = 0
 
-    with open(cust_price, 'r') as f:
-        for channel in f:
-            total += float(channel_dict[channel.strip()])
+    for channel in cust_price_list:
+        total += float(price_dict[channel.strip()])
 
     gst = 0.18 * total
 
     return total + gst
 
 
+def allto_csv(html):
+
+    """
+    Function to scrape sub details and write to a csv file
+    :param html: html data
+    :return: csv file
+    """
+
+    soup = BeautifulSoup(html, 'html.parser')
+
+    t_body = soup.find_all(class_='info')
+
+    h = csv.writer(open('all_sub.csv', 'a'))
+
+    channel_dict = dict()
+
+    w = csv.reader(open('Package price.csv', 'r'))
+
+    for rows in w:
+        if any(x.strip() for x in rows):
+            channel_dict[rows[0]] = rows[1]
+
+    h.writerow(['ID', 'Customer Name', 'STB Number', 'Status', 'Amount'])
+
+    for item in t_body:
+        if 'Active' in item.text.strip():
+            cust = item.text.strip().split('\n')
+
+            all_packtest = get_active_pack(cust[2], cust[1], cust[0])
+
+            price_t = calc_price(channel_dict, all_packtest)
+
+            h.writerow([cust[0], cust[1], cust[2], cust[3], price_t])
+
+            print(cust[0], cust[1], cust[2], cust[3], price_t)
+
+
+def linktohtml(url):
+    """
+    Takes a url and returns its html.
+    :param: url of the page
+    :return: html
+    """
+
+    r = session.get(url)
+
+    return r.content
+
+
 def main():
 
     global session, stb_num, choice
 
-    print("Welcome to BTV Digital software by Shantam.\n\nPlease choose 1 or 2:")
+    print("Welcome to BTV Digital software by Shantam.\n\nPlease choose from below options:")
 
     while True:
 
         try:
-            choice = int(input("1. Get Active Packs     2. Check Package Price     3. Refresh Price list\n" + '>  '))
+            choice = int(input("1. Get Active Packs     2. Check Package Price     3. Refresh Price list    "
+                               "4. Generate All User list.\n" + '>  '))
         except ValueError:
             continue
-        if choice not in range(1, 4):
+        if choice not in range(1, 5):
             continue
         else:
             break
 
+    if os.path.exists('config.ini'):
+        with open('config.ini', 'r') as f:
+            creds = json.load(f)
+            uname = [*creds][0]
+            passw = creds[uname]
+
+    else:
+        uname = input("Enter login id: ")
+        passw = input("Enter password: ")
+        creds = dict()
+        creds[uname] = passw
+        with open('config.ini', 'w') as f:
+            json.dump(creds, f)
+
     session = requests.Session()
 
-    log_in()
+    log_in(uname, passw)
 
-    stb_num = input("\nEnter STB No.: ")
+    if choice == 1:
 
-    stb_det = stb_status(stb_status_html())
+        stb_num = input("Enter STB No.: ")
 
-    stb_id = stb_det[0]
-    stb_name = stb_det[1]
-    stb_ua = stb_det[2]
+        stb_det = stb_status(stb_status_html())
 
-    get_active_pack(stb_ua, stb_name, stb_id)       # Gets channels subscribed in a particular stb.
+        stb_id = stb_det[0]
+        stb_name = stb_det[1]
+        stb_ua = stb_det[2]
 
-    if choice == str(2):
-        print('Total Package Price: ', calc_price('Package price.csv', 'temp.k'))
-    elif choice == str(3):
+        all_packtest = get_active_pack(stb_ua, stb_name, stb_id)
+
+        for item in all_packtest:
+            print(item)
+
+    elif choice == 4:
+
+        link = sub_url
+
+        while True:
+
+            content = linktohtml(link)
+
+            allto_csv(content)
+
+            soup = BeautifulSoup(content, 'html.parser')
+
+            nxt = soup.find(class_='next')
+
+            if nxt:
+
+                for item in nxt.find_all('a', href=True):
+                    if item.text:
+                        link = home + item['href']
+                        continue
+                    else:
+                        print('Cant get href in link')
+                        break
+
+            else:
+                print('No more Next buttons.')
+                break
+
+    elif choice == 2:
+
+        stb_num = input("Enter STB No.: ")
+
+        stb_det = stb_status(stb_status_html())
+
+        stb_id = stb_det[0]
+        stb_name = stb_det[1]
+        stb_ua = stb_det[2]
+
+        all_packtest = get_active_pack(stb_ua, stb_name, stb_id)
+
+        w = csv.reader(open('Package price.csv', 'r'))
+
+        channel_dict = dict()
+
+        for rows in w:
+            if any(x.strip() for x in rows):
+                channel_dict[rows[0]] = rows[1]
+
+        print('Total Package Price: ', calc_price(channel_dict, all_packtest))
+
+    elif choice == 3:
+
+        stb_num = input("\nEnter STB No.: ")
+
+        stb_det = stb_status(stb_status_html())
+
+        stb_id = stb_det[0]
+        stb_name = stb_det[1]
+        stb_ua = stb_det[2]
+
+        get_active_pack(stb_ua, stb_name, stb_id)
+
         calc_all(stb_ua, stb_name, stb_id)  # Gets alacarta channels and their respected price.
 
         print(write_csv(calc_all(stb_ua, stb_name, stb_id), 'Package price.csv'))    # Creates csv file.
@@ -187,4 +311,5 @@ def main():
 
 
 if __name__ == '__main__':
+
     main()
