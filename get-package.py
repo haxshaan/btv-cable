@@ -152,8 +152,6 @@ def allto_csv(html):
 
     t_body = soup.find_all(class_='info')
 
-    h = csv.writer(open('all_sub.csv', 'a'))
-
     channel_dict = dict()
 
     w = csv.reader(open('Package price.csv', 'r'))
@@ -162,19 +160,23 @@ def allto_csv(html):
         if any(x.strip() for x in rows):
             channel_dict[rows[0]] = rows[1]
 
-    h.writerow(['ID', 'Customer Name', 'STB Number', 'Status', 'Amount'])
+    with open('all_sub.csv', 'a') as out_file:
 
-    for item in t_body:
-        if 'Active' in item.text.strip():
-            cust = item.text.strip().split('\n')
+        h = csv.writer(out_file)
 
-            all_packtest = get_active_pack(cust[2], cust[1], cust[0])
+        h.writerow(['ID', 'Customer Name', 'STB Number', 'Status', 'Amount'])
 
-            price_t = calc_price(channel_dict, all_packtest)
+        for item in t_body:
+            if 'Active' in item.text.strip():
+                cust = item.text.strip().split('\n')
 
-            h.writerow([cust[0], cust[1], cust[2], cust[3], price_t])
+                all_packtest = get_active_pack(cust[2], cust[1], cust[0])
 
-            print(cust[0], cust[1], cust[2], cust[3], price_t)
+                price_t = calc_price(channel_dict, all_packtest)
+
+                h.writerow([cust[0], cust[1], cust[2], cust[3], price_t])
+
+                print(cust[0], cust[1], cust[2], cust[3], price_t)
 
 
 def linktohtml(url):
@@ -194,6 +196,8 @@ def main():
     global session, stb_num, choice
 
     print("Welcome to BTV Digital software by Shantam.\n\nPlease choose from below options:")
+
+    print('Twitter: {0}'.format('@Haxcrypto'))
 
     while True:
 
@@ -312,4 +316,25 @@ def main():
 
 if __name__ == '__main__':
 
-    main()
+    counter = 1
+
+    while True:
+
+        if counter == 1:
+
+            main()
+            counter += 1
+            continue
+
+        else:
+
+            continu = input("Press any key to exit or 'c' to continue: ")
+
+            if continu == 'c':
+                main()
+                continue
+
+            else:
+                break
+
+
