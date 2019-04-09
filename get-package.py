@@ -140,17 +140,14 @@ def calc_price(price_dict, cust_price_list):
     return total + gst
 
 
-def allto_csv(html):
+def allto_csv(t_body, out):
 
     """
     Function to scrape sub details and write to a csv file
-    :param html: html data
+    :param t_body: thread body containing sub list
+    :param out: csv writer instance
     :return: csv file
     """
-
-    soup = BeautifulSoup(html, 'html.parser')
-
-    t_body = soup.find_all(class_='info')
 
     channel_dict = dict()
 
@@ -160,23 +157,17 @@ def allto_csv(html):
         if any(x.strip() for x in rows):
             channel_dict[rows[0]] = rows[1]
 
-    with open('all_sub.csv', 'a') as out_file:
+    for item in t_body:
+        if 'Active' in item.text.strip():
+            cust = item.text.strip().split('\n')
 
-        h = csv.writer(out_file)
+            all_packtest = get_active_pack(cust[2], cust[1], cust[0])
 
-        h.writerow(['ID', 'Customer Name', 'STB Number', 'Status', 'Amount'])
+            price_t = calc_price(channel_dict, all_packtest)
 
-        for item in t_body:
-            if 'Active' in item.text.strip():
-                cust = item.text.strip().split('\n')
+            out.writerow([cust[0], cust[1], cust[2], cust[3], price_t])
 
-                all_packtest = get_active_pack(cust[2], cust[1], cust[0])
-
-                price_t = calc_price(channel_dict, all_packtest)
-
-                h.writerow([cust[0], cust[1], cust[2], cust[3], price_t])
-
-                print(cust[0], cust[1], cust[2], cust[3], price_t)
+            print(cust[0], cust[1], cust[2], cust[3], price_t)
 
 
 def linktohtml(url):
@@ -248,29 +239,37 @@ def main():
 
         link = sub_url
 
-        while True:
+        with open('all_sub.csv', 'w') as o_file:
 
-            content = linktohtml(link)
+            file = csv.writer(o_file)
 
-            allto_csv(content)
+            file.writerow(['ID', 'Customer Name', 'STB Number', 'Status', 'Amount'])
 
-            soup = BeautifulSoup(content, 'html.parser')
+            while True:
 
-            nxt = soup.find(class_='next')
+                content = linktohtml(link)
 
-            if nxt:
+                soup = BeautifulSoup(content, 'html.parser')
 
-                for item in nxt.find_all('a', href=True):
-                    if item.text:
-                        link = home + item['href']
-                        continue
-                    else:
-                        print('Cant get href in link')
-                        break
+                t_body = soup.find_all(class_='info')
 
-            else:
-                print('No more Next buttons.')
-                break
+                if t_body:
+
+                    allto_csv(t_body, file)
+
+                    nxt = soup.find(class_='next')
+
+                    for item in nxt.find_all('a', href=True):
+                        if item.text:
+                            link = home + item['href']
+                            continue
+                        else:
+                            print('Cant get href in link')
+                            break
+
+                else:
+                    print('No more subscriber data')
+                    break
 
     elif choice == 2:
 
@@ -336,5 +335,3 @@ if __name__ == '__main__':
 
             else:
                 break
-
-
